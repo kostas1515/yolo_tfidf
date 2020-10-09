@@ -7,7 +7,7 @@ import torch
 import io
 import pandas as pd
 import helper as helper
-import matplotlib.pyplot as plt
+
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms, utils
 import random
