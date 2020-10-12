@@ -24,7 +24,7 @@ def init_model(hyperparameters,mode,show=True):
         optimizer = optim.Adam(net.parameters(), lr=hyperparameters['lr'], weight_decay=hyperparameters['weight_decay'])
     
     try:
-        PATH = '../checkpoints/'+hyperparameters['path']+'/'
+        PATH = '../checkpoint/'+hyperparameters['path']+'/'
         checkpoint = torch.load(PATH+hyperparameters['path']+'.tar')
         if mode['bayes_opt']==False:
             try:
@@ -43,7 +43,7 @@ def init_model(hyperparameters,mode,show=True):
             print("WARNING FILE NOT FOUND INSTEAD USING OFFICIAL PRETRAINED")
             net.load_weights("../yolov3.weights")
         try:
-            PATH = '../checkpoints/'+hyperparameters['path']+'/'
+            PATH = '../checkpoint/'+hyperparameters['path']+'/'
             os.mkdir(PATH)
         except FileExistsError:
             pass
@@ -54,10 +54,9 @@ def init_model(hyperparameters,mode,show=True):
         model = nn.DataParallel(net)
     else:
         model=net
-        hyperparameters['batch_size']=8
     model.to(device)
     
-    if show==True:
+    if mode['show_hp']==True:
         print(hyperparameters)
     
     if isinstance(hyperparameters['idf_weights'],pd.DataFrame)==False:
@@ -68,4 +67,4 @@ def init_model(hyperparameters,mode,show=True):
     
     
             
-    return model,optimizer,hyperparameters
+    return model,optimizer,hyperparameters,PATH

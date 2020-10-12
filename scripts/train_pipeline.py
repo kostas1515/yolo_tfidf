@@ -12,8 +12,8 @@ import init_model
 hyperparameters={'lr': 0.0001, 
                  'epochs': 90,
                  'resume_from':0,
-                 'coco_version': '2014', #can be either '2014' or '2017'
-                 'batch_size': 1,
+                 'coco_version': '2017', #can be either '2014' or '2017'
+                 'batch_size': 2,
                  'weight_decay': 0.0039,
                  'momentum': 0.76, 
                  'optimizer': 'sgd', 
@@ -32,16 +32,17 @@ hyperparameters={'lr': 0.0001,
                  'augment': 1, 
                  'workers': 4,
                  'pretrained':False,
-                 'path': 'test', 
+                 'path': 'yolo2017_semiprtnd', 
                  'reduction': 'sum'}
 
-mode={'bayes_opt':False,
+mode={'bayes_opt':True,
       'multi_scale':False,
       'debugging':False,
       'show_output':True,
+      'show_hp':True,
       'multi_gpu':False,
-      'show_temp_summary':True,
-      'save_summary': False
+      'show_temp_summary':False,
+      'save_summary': True
      }
 
 if(mode['show_temp_summary']==True):
@@ -50,11 +51,11 @@ if(mode['save_summary']==True):
     writer = SummaryWriter('../tensorboard/'+hyperparameters['path'])    
 mAP_best=0
 coco_version=hyperparameters['coco_version']
-
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 for i in range(hyperparameters['epochs']):
     
-    model,optimizer,hyperparameters=init_model.init_model(hyperparameters,mode)
+    model,optimizer,hyperparameters,PATH=init_model.init_model(hyperparameters,mode)
 
     if type(model) is nn.DataParallel:
         inp_dim=model.module.inp_dim

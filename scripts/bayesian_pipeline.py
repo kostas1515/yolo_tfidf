@@ -62,7 +62,7 @@ def bayesian_opt(w,m,g,a,lcoor,lno,iou_thresh,iou_type,bayes_opt=True):
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 #     print('Using: ',device)
 
-    model,optimizer,hyperparameters=init_model.init_model(hyperparameters,mode,show=False)
+    model,optimizer,hyperparameters,PATH=init_model.init_model(hyperparameters,mode,show=False)
 
     if type(model) is nn.DataParallel:
         inp_dim=model.module.inp_dim
