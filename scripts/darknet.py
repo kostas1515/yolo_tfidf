@@ -158,7 +158,7 @@ def create_modules(blocks):
 class Darknet(nn.Module):
     def __init__(self, cfgfile,multi_scale=False):
         super(Darknet, self).__init__()
-        torch.backends.cudnn.benchmark = True
+#         torch.backends.cudnn.benchmark = True
         self.blocks = parse_cfg(cfgfile)
         self.net_info, self.module_list = create_modules(self.blocks)
         if multi_scale==True:

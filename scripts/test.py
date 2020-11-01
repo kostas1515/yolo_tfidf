@@ -7,6 +7,7 @@ import helper as helper
 import coco_utils
 import coco_eval
 import torchvision.ops.boxes as nms_box
+import sys,os
 
 
 
@@ -109,10 +110,15 @@ def evaluate(model, device,coco_version,confidence=0.01,iou_threshold=0.5,subset
 #         print('det is ',res)
         
     # gather the stats from all processes
+    
+    sys.stdout = open(os.devnull, 'w') #wrapper to disable hardcoded printing
+    
     coco_evaluator.synchronize_between_processes()
-
     # accumulate predictions from all images
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
     torch.set_num_threads(n_threads)
-    return coco_evaluator.get_stats()[0]
+    mAP=coco_evaluator.get_stats()[0]
+    
+    sys.stdout = sys.__stdout__ #wrapper to enable hardcoded printing (return to normal mode)
+    return mAP

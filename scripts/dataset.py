@@ -25,15 +25,20 @@ class Coco(Dataset):
         coco_version:(string) either 2014/2017
         subset: float :range (0-1)
         """
+        hardcoded_image_path='../../images' #change this to point to the img dir
+        hardcoded_label_path='../../labels/coco/labels' #change this to point to the label dir
+        
         temp_path='../'#make this generic change it to be in the labels and image folder
         self.pointers=pd.read_csv('../pointers/'+partition+coco_version+'.txt',names=['img'])
         self.pointers['box']=self.pointers['img'].apply(lambda x: x.split('.')[0]+'.txt')
         if coco_version=='2017':
-            self.my_image_path = os.path.join(temp_path+'../images',partition+'2017/')
-            self.my_label_path=os.path.join(temp_path+'../labels/coco/labels',partition+'2017/')
+            self.my_image_path = os.path.join(hardcoded_image_path,partition+'2017/')
+            self.my_label_path=os.path.join(hardcoded_label_path,partition+'2017/')
         elif coco_version=='2014':
-            self.my_image_path = temp_path+'../images'
-            self.my_label_path=temp_path+'../labels/coco/labels'
+            #if coco2014 then append /train2017 or val2017 in formt of the image path according to 2014 partition
+            #these already exist in pointer folder in the train2014 and val2014 txt's
+            self.my_image_path = hardcoded_image_path
+            self.my_label_path=hardcoded_label_path
         if subset<1:
             self.pointers=self.pointers.sample(n=int(self.pointers.shape[0]*subset), random_state=int(np.random.randint(0,10,size=1)))
         self.transform = transform
@@ -100,8 +105,8 @@ class ResizeToTensor(object):
         img = cv2.resize(img, (self.scale,self.scale))        #Resize to the input dimension
         img =  img.transpose((2,0,1)) # H x W x C -> C x H x W
         img = img/255.0       #Add a channel at 0 (for batch) | Normalise.
+        img= torch.from_numpy(img).float()
         
-        img=torch.tensor(img,dtype=torch.float)
         mean=torch.tensor([[[0.485, 0.456, 0.406]]]).T
         std=torch.tensor([[[0.229, 0.224, 0.225]]]).T
         img = (img-mean)/std

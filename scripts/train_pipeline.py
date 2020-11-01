@@ -9,36 +9,36 @@ import yolo_function as yolo_function
 import init_model
 
 
-hyperparameters={'lr': 0.0001, 
+hyperparameters={'lr': 0.001, 
                  'epochs': 90,
                  'resume_from':0,
-                 'coco_version': '2017', #can be either '2014' or '2017'
-                 'batch_size': 2,
-                 'weight_decay': 0.0039,
-                 'momentum': 0.76, 
+                 'coco_version': '2014', #can be either '2014' or '2017'
+                 'batch_size':8 ,
+                 'weight_decay': 0.0005,
+                 'momentum': 0.9, 
                  'optimizer': 'sgd', 
-                 'alpha': 0.8808, 
-                 'gamma': 1.343, 
-                 'lcoord': 3.52,
-                 'lno_obj': 1.53,
+                 'alpha': 0.5, 
+                 'gamma': 0, 
+                 'lcoord': 5,
+                 'lno_obj': 0.5,
                  'iou_type': (0, 0, 0),
-                 'iou_ignore_thresh': 0.4194, 
+                 'iou_ignore_thresh': 0.2, 
                  'tfidf': True, 
                  'idf_weights': True, 
                  'tfidf_col_names': ['img_freq', 'none', 'none', 'none', 'no_softmax'],
                  'wasserstein':False,
                  'inf_confidence':0.01,
                  'inf_iou_threshold':0.5,
-                 'augment': 1, 
+                 'augment': 0, 
                  'workers': 4,
                  'pretrained':False,
-                 'path': 'yolo2017_semiprtnd', 
+                 'path': 'yolo2014_idf', 
                  'reduction': 'sum'}
 
-mode={'bayes_opt':True,
+mode={'bayes_opt':False,
       'multi_scale':False,
       'debugging':False,
-      'show_output':True,
+      'show_output':False,
       'show_hp':True,
       'multi_gpu':False,
       'show_temp_summary':False,
@@ -78,6 +78,7 @@ for i in range(hyperparameters['epochs']):
 
     outcome=yolo_function.train_one_epoch(model,optimizer,train_dataloader,hyperparameters,mode)
     mAP=test.evaluate(model, device,coco_version,confidence=hyperparameters['inf_confidence'],iou_threshold=hyperparameters['inf_iou_threshold'])
+    print('Map is: ',mAP)
     if(mode['save_summary']==True):
         writer.add_scalar('Loss/train', outcome['avg_loss'], hyperparameters['resume_from'])
         writer.add_scalar('AIoU/train', outcome['avg_iou'], hyperparameters['resume_from'])
@@ -102,7 +103,7 @@ for i in range(hyperparameters['epochs']):
             'epoch':hyperparameters['resume_from'],
             'mAP': mAP,
             'hyperparameters': hyperparameters
-            }, PATH+hyperparameters['path']+'.tar')
+            }, os.path.join('../checkpoint/'+hyperparameters['path'],hyperparameters['path']+'_last.tar'))
 
         
     if mAP>mAP_best:
@@ -118,7 +119,7 @@ for i in range(hyperparameters['epochs']):
             'epoch':hyperparameters['resume_from'],
             'mAP': mAP,
             'hyperparameters': hyperparameters
-            }, PATH+hyperparameters['path']+'_best.tar')
+            }, os.path.join('../checkpoint/'+hyperparameters['path'],hyperparameters['path']+'_best.tar'))
         mAP_best=mAP
         
     

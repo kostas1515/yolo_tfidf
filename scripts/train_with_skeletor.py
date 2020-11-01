@@ -15,6 +15,7 @@ import helper as helper
 import coco_utils
 import coco_eval
 import torchvision.ops.boxes as nms_box
+from torch.utils.tensorboard import SummaryWriter
 import sys,os
 
 import skeletor
@@ -26,16 +27,16 @@ from skeletor.utils import AverageMeter, accuracy, progress_bar
 
 def add_train_args(parser):
     # Main arguments go here
-    parser.add_argument('--lr', default=.1, type=float)
-    parser.add_argument('--batch_size', default=8, type=int)
+    parser.add_argument('--lr', default=.001, type=float)
+    parser.add_argument('-b','--batch_size', default=8, type=int)
     
-    parser.add_argument('--eval_batch_size', default=1, type=int)
+    parser.add_argument('--eval_batch_size', default=8, type=int)
     
     parser.add_argument('--inf_confidence', default=0.01, type=float)
     
-    parser.add_argument('--inf_iou_threshold', default=0.5, type=float)
+    parser.add_argument('--inf_iou_threshold', default=0.6, type=float)
     
-    parser.add_argument('--epochs', default=3, type=int)
+    parser.add_argument('--epochs', default=50, type=int)
     
     parser.add_argument('--gamma', type=float, default=0.0,
                         help='gamma for focal loss')
@@ -55,21 +56,21 @@ def add_train_args(parser):
     parser.add_argument('--weight_decay', default=5e-4, type=float,
                         help='weight decay')
     
-    parser.add_argument('--coco_version', default='2017', type=str,
+    parser.add_argument('--coco_version', default='2014', type=str,
                         help='Dataset Partition')
     
     parser.add_argument('--optimizer', default='sgd', type=str,
                         help='either sgd or adam')
     
-    parser.add_argument('--tfidf', default=False, type=bool)
+    parser.add_argument('--tfidf', default=False, action='store_true')
     
-    parser.add_argument('--wasserstein', default=False, type=bool,
+    parser.add_argument('--wasserstein', default=False, action='store_true',
                        help='if true instead of BCE it will compute wasserstein distance for confidence loss')
     
-    parser.add_argument('--augment', default=0, type=int,
-                       help='either 0/1 if 1 then it augments bbs and images')
+    parser.add_argument('--augment', default=0, action='store_const',
+                       const=1,help='either 0/1 if 1 then it augments bbs and images')
     
-    parser.add_argument('--is_pretrained', default=False, type=bool,
+    parser.add_argument('--is_pretrained', default=False, action='store_true',
                        help='if true then depending on path it will either load yolo official weights or load from checkpoint')
     
     parser.add_argument('--iou_type', default=(0,0,0), type=tuple,
@@ -78,13 +79,25 @@ def add_train_args(parser):
     parser.add_argument('--iou_ignore_thresh', default=0.5, type=float,
                        help='ignore negative examples abou this threshold')
     
-    parser.add_argument('--cuda', action='store_true',
-                        help='if true, use GPU!')
-    
     parser.add_argument('--reduction', default='sum', type=str,
                         help='min batch reduction either sum or mean')
     
-    parser.add_argument('--path', help='path to experiment')
+    parser.add_argument('--trial_id',default='', help='path to experiment')
+    
+    parser.add_argument('--multi_scale',default=False, action='store_true', help='change network size on the fly')
+    
+    parser.add_argument('--show_hp',default=False,action='store_true', help='show hyperparameters')
+    
+    parser.add_argument('--show_output',default=False,action='store_true', help='show training output')
+    
+    parser.add_argument('--resume',default='', help='resume training either from last trial or best')
+    
+    parser.add_argument('--show_temp_summary',default=False,action='store_true', help='start tensorboard to show live training in folder trial_id')
+    
+    parser.add_argument('--train_subset',default=1, type=float, help='select the percentage of training data')
+    
+    parser.add_argument('--test_subset',default=1, type=float, help='select the percentage of testing data')
+
 
 
 def adjust_learning_rate(epoch, optimizer, lr, schedule, decay):
@@ -101,6 +114,7 @@ def train(trainloader, model, optimizer, epoch, cuda=True):
     # switch to train mode
     model.train()
     hyperparameters=model.hp
+    mode=model.mode
     
     if type(model) is nn.DataParallel:
         inp_dim=model.module.inp_dim
@@ -128,6 +142,11 @@ def train(trainloader, model, optimizer, epoch, cuda=True):
     avg_neg = AverageMeter()
     end = time.time()
     break_flag=0
+    
+    if mode['show_temp_summary']==True:
+        writer = SummaryWriter(os.path.join(track.trial_dir(),'temp_vis/'))
+        
+        
 
     for batch_idx, (inputs, targets) in enumerate(trainloader):
         # measure data loading time
@@ -150,10 +169,10 @@ def train(trainloader, model, optimizer, epoch, cuda=True):
         try:
             loss=util.yolo_loss(resp_raw_pred,targets,no_obj,resp_pw_ph,resp_cx_cy,resp_stride,inp_dim,hyperparameters)
         except RuntimeError:
-#                 print('bayes opt failed')
+            print('bayes opt failed')
             break_flag=1
             break
-        loss=util.yolo_loss(resp_raw_pred,targets,no_obj,resp_pw_ph,resp_cx_cy,resp_stride,inp_dim,hyperparameters)
+        
 
         # measure accuracy and record loss
         avg_loss.update(loss.item())
@@ -162,9 +181,7 @@ def train(trainloader, model, optimizer, epoch, cuda=True):
         avg_no_conf.update(stats['neg_conf'])
         avg_pos.update(stats['pos_class'])
         avg_neg.update(stats['neg_class'])
-
-
-
+        
         # compute gradient and do SGD step
         optimizer.zero_grad()
         loss.backward()
@@ -173,14 +190,22 @@ def train(trainloader, model, optimizer, epoch, cuda=True):
         # measure elapsed time
         batch_time.update(time.time() - end)
         end = time.time()
-
-        # plot progress
-        progress_str = 'Loss: %.4f | AvIoU: %.3f | AvPConf: %.3f | AvNConf: %.5f | AvClass: %.3f | AvNClass: %.5f'\
-            % (loss.item(), stats['iou'], stats['pos_conf'], stats['neg_conf'],stats['pos_class'],stats['neg_class'])
         
-        progress_bar(batch_idx, len(trainloader), progress_str)
+        if mode['show_output']==True: # plot progress
+            progress_str = 'Loss: %.4f | AvIoU: %.3f | AvPConf: %.3f | AvNConf: %.5f | AvClass: %.3f | AvNClass: %.5f'\
+                % (loss.item(), stats['iou'], stats['pos_conf'], stats['neg_conf'],stats['pos_class'],stats['neg_class'])
+            progress_bar(batch_idx, len(trainloader), progress_str)
 
         iteration = epoch * len(trainloader) + batch_idx
+        
+        if mode['show_temp_summary']==True:
+            writer.add_scalar('AvLoss/train',avg_loss.avg,iteration)
+            writer.add_scalar('AvIoU/train', avg_iou.avg, iteration)
+            writer.add_scalar('AvPConf/train', avg_conf.avg, iteration)
+            writer.add_scalar('AvNConf/train', avg_no_conf.avg, iteration)
+            writer.add_scalar('AvClass/train', avg_pos.avg, iteration)
+            writer.add_scalar('AvNClass/train', avg_neg.avg, iteration)
+        
         
     track.metric(iteration=iteration, epoch=epoch,
                  avg_train_loss=avg_loss.avg,
@@ -205,10 +230,7 @@ def train(trainloader, model, optimizer, epoch, cuda=True):
 
 
 def test(testloader, model,epoch, device):
-    
-    n_threads = torch.get_num_threads()
     # FIXME remove this and make paste_masks_in_image run on the GPU
-    torch.set_num_threads(1)
     cpu_device = torch.device("cpu")
 
     device = device
@@ -313,7 +335,6 @@ def test(testloader, model,epoch, device):
     # accumulate predictions from all images
     coco_evaluator.accumulate()
     coco_evaluator.summarize()
-    torch.set_num_threads(n_threads)
     
     metrics=coco_evaluator.get_stats()
     
@@ -334,7 +355,6 @@ def test(testloader, model,epoch, device):
                'recall@large':metrics[11]}
     
     track.metric(iteration=0, epoch=epoch,
-                 avg_test_coco_map=metrics[0],
                  coco_stats=coco_stats)
     
     
@@ -342,6 +362,7 @@ def test(testloader, model,epoch, device):
 
 
 def do_training(args):
+    
     
     hyperparameters={'lr': args.lr, 
                  'epochs': args.epochs,
@@ -355,7 +376,7 @@ def do_training(args):
                  'gamma': args.gamma, 
                  'lcoord': args.lcoord,
                  'lno_obj': args.lno_obj,
-                 'iou_type': args.iou_type,
+                 'iou_type': tuple(int(a) for a in tuple(args.iou_type)),
                  'iou_ignore_thresh': args.iou_ignore_thresh, 
                  'tfidf': args.tfidf, 
                  'idf_weights': True, 
@@ -364,19 +385,46 @@ def do_training(args):
                  'inf_confidence':args.inf_confidence,
                  'inf_iou_threshold':args.inf_iou_threshold,
                  'augment': args.augment, 
-                 'workers': 4,
+                 'workers': 1,
                  'pretrained':args.is_pretrained,
-                 'path': args.path, 
+                 'path': args.trial_id, 
                  'reduction': args.reduction}
     
-    mode={'bayes_opt':True,
-      'multi_scale':False,
-      'debugging':False,
-      'show_hp':True,
-      'multi_gpu':True,
-      'show_temp_summary':False,
-      'save_summary': True
+    
+    mode={'bayes_opt':False,
+      'multi_scale':args.multi_scale,
+      'show_hp':args.show_hp,
+      'show_output':args.show_output,
+      'multi_gpu':False,
+      'train_subset':args.train_subset,
+      'test_subset':args.test_subset,
+      'show_temp_summary':args.show_temp_summary,
+      'save_summary': False
      }
+    
+    
+    
+    this_proj = track.Project("./logs/"+args.experimentname)
+    if (args.resume=='last'):
+        this_proj = track.Project("./logs/"+args.experimentname)
+        most_recent = this_proj.ids["start_time"].nlargest(2).idxmin()
+        most_recent_id = this_proj.ids["trial_id"].iloc[[most_recent]]
+        PATH=os.path.join("./logs/"+args.experimentname,most_recent_id.item())
+        hyperparameters['path']=os.path.join(PATH,'last.tar')
+        args.resume=most_recent_id.item()
+    elif (args.resume=='best'):
+        ids = this_proj.ids["trial_id"]
+        res = this_proj.results(ids)
+        best_map = res["coco_stats:map_all"].idxmax()
+        best_map_id = res["trial_id"].iloc[[best_map]]
+        PATH=os.path.join("./logs/"+args.experimentname,best_map_id.item())
+        hyperparameters['path']=os.path.join(PATH,'best.tar')
+        args.resume=best_map_id.item()
+    else:
+        PATH=os.path.join("./logs/"+args.experimentname,args.resume)
+        hyperparameters['path']=os.path.join(PATH,'last.tar')
+    
+
     
     coco_version=hyperparameters['coco_version']
     mAP_best=0
@@ -386,6 +434,7 @@ def do_training(args):
     
     
     model.hp=hyperparameters
+    model.mode=mode
     
     
     if type(model) is nn.DataParallel:
@@ -395,24 +444,24 @@ def do_training(args):
 
 
     if hyperparameters['augment']>0:
-        train_dataset=Coco(partition='train',coco_version=coco_version,subset=0.0001,transform=transforms.Compose([Augment(hyperparameters['augment']),
+        train_dataset=Coco(partition='train',coco_version=coco_version,subset=mode['train_subset'],transform=transforms.Compose([Augment(hyperparameters['augment']),
                                                                                                      ResizeToTensor(inp_dim)]))
     else:
-        train_dataset=Coco(partition='train',coco_version=coco_version,subset=0.0001,transform=transforms.Compose([ResizeToTensor(inp_dim)]))
+        train_dataset=Coco(partition='train',coco_version=coco_version,subset=mode['train_subset'],transform=transforms.Compose([ResizeToTensor(inp_dim)]))
 
     batch_size=hyperparameters['batch_size']
 
     train_dataloader = DataLoader(train_dataset, batch_size=batch_size,
-                                shuffle=True,collate_fn=helper.collate_fn, num_workers=hyperparameters['workers'])
+                                shuffle=True,collate_fn=helper.collate_fn, num_workers=hyperparameters['workers'],pin_memory=True)
     
      
-    test_dataset=Coco(partition='val',coco_version=coco_version,subset=0.001,
+    test_dataset=Coco(partition='val',coco_version=coco_version,subset=mode['test_subset'],
                                                transform=transforms.Compose([
                                                 ResizeToTensor(inp_dim)
                                                ]))
     
     test_dataloader = DataLoader(test_dataset, batch_size=args.eval_batch_size,
-                            shuffle=False,collate_fn=helper.collate_fn, num_workers=4)
+                            shuffle=False,collate_fn=helper.collate_fn, num_workers=1,pin_memory=True)
     
 
     # Calculate total number of model parameters
@@ -424,9 +473,10 @@ def do_training(args):
         track.debug("Starting epoch %d" % epoch)
 #         args.lr = adjust_learning_rate(epoch, optimizer, args.lr, args.schedule,
 #                                        args.gamma)
+
         outcome = train(train_dataloader, model, optimizer, epoch)
         
-        
+        mAP=0
         mAP=test(test_dataloader, model,epoch, device)
         
 
@@ -434,11 +484,11 @@ def do_training(args):
                     '| avg_pos %.3f | avg_neg %.5f | mAP %.5f'
                     % (epoch, outcome['avg_loss'], outcome['avg_iou'],outcome['avg_conf'],outcome['avg_no_conf'],outcome['avg_pos'],outcome['avg_neg']
                        ,mAP))
-        # Save model
+        
         model_fname = os.path.join(track.trial_dir(),
-                                   "model{}.tar".format(epoch))
+                                   "last.tar")
         torch.save({
-            'model_state_dict': model.state_dict(),
+            'model_state_dict': model.module.state_dict() if type(model) is nn.DataParallel else model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'avg_loss': outcome['avg_loss'],
             'avg_iou': outcome['avg_iou'],
@@ -456,7 +506,7 @@ def do_training(args):
             track.debug("New best score! Saving model")
             
             torch.save({
-            'model_state_dict': model.state_dict(),
+            'model_state_dict': model.module.state_dict() if type(model) is nn.DataParallel else model.state_dict(),
             'optimizer_state_dict': optimizer.state_dict(),
             'avg_loss': outcome['avg_loss'],
             'avg_iou': outcome['avg_iou'],

@@ -356,6 +356,7 @@ def yolo_loss(pred,targets,noobj_box,anchors,offset,strd,inp_dim,hyperparameters
             iou_loss=(1-iou).sum()
         else:
             iou_loss=(1-iou).mean()
+            
        
     
     bce_class=nn.CrossEntropyLoss(reduction=hyperparameters['reduction'],weight=class_weights)

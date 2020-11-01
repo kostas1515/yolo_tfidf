@@ -9,9 +9,14 @@ import os
 
 
 def init_model(hyperparameters,mode,show=True):
+    
+    
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     net = Darknet("../cfg/yolov3.cfg",multi_scale=mode['multi_scale'])
+    
+    if mode['show_hp']==True:
+        print(hyperparameters)
 
     '''
     when loading weights from dataparallel model then, you first need to instatiate the dataparallel model 
@@ -24,29 +29,24 @@ def init_model(hyperparameters,mode,show=True):
         optimizer = optim.Adam(net.parameters(), lr=hyperparameters['lr'], weight_decay=hyperparameters['weight_decay'])
     
     try:
-        PATH = '../checkpoint/'+hyperparameters['path']+'/'
-        checkpoint = torch.load(PATH+hyperparameters['path']+'.tar')
+        PATH = hyperparameters['path']
+        checkpoint = torch.load(PATH)
+        
         if mode['bayes_opt']==False:
-            try:
-                hyperparameters=checkpoint['hyperparameters']
-            except:
-                pass
+            hyperparameters=checkpoint['hyperparameters']
                         # Assuming that we https://pytorch.org/docs/stable/data.html#torch.utils.data.Datasetare on a CUDA machine, this should print a CUDA device:
         net.to(device)
         net.load_state_dict(checkpoint['model_state_dict'])
 
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
-        hyperparameters['resume_from']=checkpoint['epoch']
+        
 
     except FileNotFoundError:
         if (hyperparameters['pretrained']==True):
             print("WARNING FILE NOT FOUND INSTEAD USING OFFICIAL PRETRAINED")
             net.load_weights("../yolov3.weights")
-        try:
-            PATH = '../checkpoint/'+hyperparameters['path']+'/'
-            os.mkdir(PATH)
-        except FileExistsError:
-            pass
+        else:
+            print('training from scratch')
         
         
     net.to(device)
@@ -56,8 +56,7 @@ def init_model(hyperparameters,mode,show=True):
         model=net
     model.to(device)
     
-    if mode['show_hp']==True:
-        print(hyperparameters)
+
     
     if isinstance(hyperparameters['idf_weights'],pd.DataFrame)==False:
         if (hyperparameters['idf_weights']==True):

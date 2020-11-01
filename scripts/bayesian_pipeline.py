@@ -8,6 +8,8 @@ import torch.nn as nn
 from torch.utils.tensorboard import SummaryWriter
 import test
 import init_model
+import torch.optim as optim
+
 import yolo_function as yolo_function
 
 

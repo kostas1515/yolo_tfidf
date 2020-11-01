@@ -8,7 +8,6 @@ import torch.optim as optim
 import sys
 import torch.autograd
 import helper as helper
-from torch import autograd
 from torch.utils.tensorboard import SummaryWriter
 import test
 
@@ -32,7 +31,6 @@ def train_one_epoch(model,optimizer,dataloader,hyperparameters,mode):
         cx_cy=model.cx_cy
         stride=model.stride
     
-    coco_version=hyperparameters['coco_version']
     
 
     
