@@ -26,3 +26,8 @@ Skeletor uses persistent logging, which menas that it loggs every hyperparameter
 To use one can simply run for example:
 
 OMP_NUM_THREADS=1 python train_with_skeletor.py  --epochs=15 --batch_size=30 --iou_ignore_thresh=0.5 --weight_decay=0.005 --momentum=0.8 --gamma=2 --alpha=0.1  --lr=0.0001  --lcoord=2 --lno_obj=0.25 --iou_type=001 <experiment_name> 
+
+To use the pretrain model save the yolov3 weights inside top directory:
+wget https://pjreddie.com/media/files/yolov3.weights
+
+For more info about arguments see script train_with_skeletor lines 29-99
