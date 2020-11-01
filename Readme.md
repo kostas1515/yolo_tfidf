@@ -31,3 +31,7 @@ To use the pretrain model save the yolov3 weights inside top directory:
 wget https://pjreddie.com/media/files/yolov3.weights
 
 For more info about arguments see script train_with_skeletor lines 29-99
+
+This YOLO implementation follows the tutorial of Paperspace:
+
+https://blog.paperspace.com/how-to-implement-a-yolo-object-detector-in-pytorch/
