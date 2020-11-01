@@ -20,9 +20,9 @@ Additional important libraries:
 
 
 To use this repo with skeletor on should install the package:
-* pip install pip install skeletor-ml 
+* pip install skeletor-ml 
 
-Skeletor uses persistent logging, which menas that it loggs every parameter of the model for every epochs and makes easy to keep track of experiments.
+Skeletor uses persistent logging, which menas that it loggs every hyperparameter of the model for every epoch and makes it easy to keep track of experiments.
 To use one can simply run for example:
 
 OMP_NUM_THREADS=1 python train_with_skeletor.py  --epochs=15 --batch_size=30 --iou_ignore_thresh=0.5 --weight_decay=0.005 --momentum=0.8 --gamma=2 --alpha=0.1  --lr=0.0001  --lcoord=2 --lno_obj=0.25 --iou_type=001 <experiment_name> 
